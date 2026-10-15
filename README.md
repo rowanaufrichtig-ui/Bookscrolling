@@ -30,7 +30,7 @@ Requires JDK 17+ and the Android SDK (platform 35).
 
 ## How it works
 
-- `data/EpubParser.kt` reads the OPF package (metadata, cover, spine) and splits each chapter's XHTML into paragraph and heading posts with jsoup. A table, such as a table of contents, becomes a single post.
+- `data/EpubParser.kt` reads the OPF package (metadata, cover, spine) and splits each chapter's XHTML into paragraph and heading posts with jsoup. A table, such as a table of contents, becomes a single post, and consecutive headings (e.g. "BOOK ONE" + "CHAPTER I") merge into one chapter-title post (`data/Posts.kt`).
 - `data/Sep.kt` parses the SEP table of contents (cached for a week) and each article's `#preamble` and `#main-text`. `data/HtmlText.kt` is the shared HTML-to-posts splitter.
 - `data/Gutenberg.kt` uses Project Gutenberg's public OPDS catalog for browsing and search. It downloads the `.epub.noimages` edition, which is small and still includes the cover.
 - `data/BookRepository.kt` parses a book once and caches its posts to a compact binary file. `data/Db.kt` (SQLite) stores books, reading position, bookmarks and comments.

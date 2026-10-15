@@ -85,7 +85,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private var searchJob: Job? = null
 
     init {
-        refreshLibrary()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { repo.upgradeStoredBooks() }
+            refreshLibrary()
+        }
         search("")
     }
 

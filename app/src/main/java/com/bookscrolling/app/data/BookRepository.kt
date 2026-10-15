@@ -129,8 +129,32 @@ class BookRepository(private val context: Context) {
         dir(id).deleteRecursively()
     }
 
+    /**
+     * Books stored before chapter titles were merged into single posts are re-split once,
+     * moving their bookmarks, comments and reading position along. Blocking; call at startup.
+     */
+    fun upgradeStoredBooks() {
+        for (book in db.books()) {
+            val file = File(dir(book.id), POSTS)
+            if (!file.exists() || readVersion(file) >= FORMAT_VERSION) continue
+            runCatching {
+                val (merged, map) = Posts.mergeHeadings(readPosts(file))
+                db.remapPosts(book.id) { Posts.remapPost(it, map) }
+                db.setPostCount(book.id, merged.size + 1)
+                writePosts(file, merged)
+                synchronized(this) { postsCache.remove(book.id) }
+            }
+        }
+    }
+
+    private fun readVersion(file: File): Int =
+        DataInputStream(file.inputStream().buffered()).use { if (it.readInt() == MAGIC) it.readInt() else 1 }
+
     private fun writePosts(file: File, paras: List<Para>) {
-        DataOutputStream(file.outputStream().buffered()).use { out ->
+        val tmp = File(file.parentFile, file.name + ".tmp")
+        DataOutputStream(tmp.outputStream().buffered()).use { out ->
+            out.writeInt(MAGIC)
+            out.writeInt(FORMAT_VERSION)
             out.writeInt(paras.size)
             for (p in paras) {
                 out.writeBoolean(p.heading)
@@ -138,11 +162,16 @@ class BookRepository(private val context: Context) {
                 writeString(out, p.chapter)
             }
         }
+        tmp.renameTo(file)
     }
 
     private fun readPosts(file: File): List<Para> =
         DataInputStream(file.inputStream().buffered()).use { input ->
-            val n = input.readInt()
+            var n = input.readInt()
+            if (n == MAGIC) {
+                input.readInt() // version
+                n = input.readInt()
+            }
             List(n) { Para(input.readBoolean(), readString(input), readString(input)) }
         }
 
@@ -160,6 +189,9 @@ class BookRepository(private val context: Context) {
 
     companion object {
         private const val POSTS = "posts.bin"
+        private const val MAGIC = 0x426b5363 // "BkSc"
+        /** 2: consecutive headings merged into one post. */
+        private const val FORMAT_VERSION = 2
         fun gutenbergId(id: Int) = "g$id"
         fun sepId(slug: String) = "s$slug"
     }

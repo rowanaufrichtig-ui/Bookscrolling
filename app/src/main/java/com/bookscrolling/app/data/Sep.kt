@@ -42,18 +42,13 @@ object Sep {
         val title = doc.selectFirst("#aueditable h1, #article h1, h1")?.text()?.trim().orEmpty().ifBlank { "Untitled" }
         val author = authorOf(doc.selectFirst("#article-copyright")) ?: "Stanford Encyclopedia of Philosophy"
         val paras = ArrayList<Para>()
-        var chapter = ""
         val pubinfo = doc.selectFirst("#pubinfo")?.text()?.trim()
         if (!pubinfo.isNullOrBlank()) paras += Para(false, pubinfo, "")
         for (section in listOfNotNull(doc.selectFirst("#preamble"), doc.selectFirst("#main-text"))) {
-            HtmlText.extract(section) { heading, text ->
-                val clean = cleanMath(text)
-                if (heading) chapter = clean.lineSequence().first().take(60)
-                paras += Para(heading, clean, chapter)
-            }
+            HtmlText.extract(section) { heading, text -> paras += Para(heading, cleanMath(text), "") }
         }
         if (paras.none { !it.heading && it.text.length > 40 }) throw EpubException("Couldn't read this article")
-        return SepArticle(title, author, paras)
+        return SepArticle(title, author, Posts.mergeHeadings(paras).first)
     }
 
     private val latex = mapOf(

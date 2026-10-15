@@ -118,4 +118,38 @@ class Db(context: Context) : SQLiteOpenHelper(context, "bookscrolling.db", null,
             )
         }
     }
+
+    /** Moves bookmarks, comments and reading position to new post numbers after re-splitting a book. */
+    fun remapPosts(bookId: String, remap: (Int) -> Int) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            val marks = db.rawQuery("SELECT post, created_at FROM likes WHERE book_id = ?", arrayOf(bookId)).use { c ->
+                buildList { while (c.moveToNext()) add(c.getInt(0) to c.getLong(1)) }
+            }
+            db.delete("likes", "book_id = ?", arrayOf(bookId))
+            for ((post, created) in marks) {
+                db.execSQL(
+                    "INSERT OR IGNORE INTO likes(book_id, post, created_at) VALUES(?, ?, ?)",
+                    arrayOf<Any>(bookId, remap(post), created),
+                )
+            }
+            val comments = db.rawQuery("SELECT id, post FROM comments WHERE book_id = ?", arrayOf(bookId)).use { c ->
+                buildList { while (c.moveToNext()) add(c.getLong(0) to c.getInt(1)) }
+            }
+            for ((id, post) in comments) {
+                db.execSQL("UPDATE comments SET post = ? WHERE id = ?", arrayOf<Any>(remap(post), id))
+            }
+            book(bookId)?.let { b ->
+                db.execSQL("UPDATE books SET position = ? WHERE id = ?", arrayOf<Any>(remap(b.position), bookId))
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun setPostCount(bookId: String, count: Int) {
+        writableDatabase.execSQL("UPDATE books SET post_count = ? WHERE id = ?", arrayOf<Any>(count, bookId))
+    }
 }

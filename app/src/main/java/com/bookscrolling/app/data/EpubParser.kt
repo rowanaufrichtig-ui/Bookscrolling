@@ -61,17 +61,13 @@ object EpubParser {
             .filter { it.type.contains("html") || it.href.endsWith("html") || it.href.endsWith("htm") }
 
         val paragraphs = ArrayList<Para>()
-        var chapter = ""
         for (item in spine) {
             val html = readText(item.href) ?: continue
             val body = Jsoup.parse(html).body()
-            HtmlText.extract(body) { heading, text ->
-                if (heading) chapter = text.lineSequence().first().take(60)
-                paragraphs += Para(heading, text, chapter)
-            }
+            HtmlText.extract(body) { heading, text -> paragraphs += Para(heading, text, "") }
         }
         if (paragraphs.isEmpty()) throw EpubException("No readable text found in this EPUB")
-        return ParsedEpub(title, author, coverBytes, coverExt, paragraphs)
+        return ParsedEpub(title, author, coverBytes, coverExt, Posts.mergeHeadings(paragraphs).first)
     }
 
     private fun local(el: Element) = el.tagName().substringAfter(':').lowercase()

@@ -68,9 +68,9 @@ class EpubParserTest {
         assertEquals("jpg", book.coverExt)
         assertEquals(
             listOf(
-                Para(true, "CHAPTER I.\nThe Start", "CHAPTER I."),
-                Para(false, "First paragraph here.", "CHAPTER I."),
-                Para(false, "Nested paragraph.", "CHAPTER I."),
+                Para(true, "CHAPTER I.\nThe Start", "CHAPTER I. · The Start"),
+                Para(false, "First paragraph here.", "CHAPTER I. · The Start"),
+                Para(false, "Nested paragraph.", "CHAPTER I. · The Start"),
                 Para(true, "Two", "Two"),
                 Para(false, "Line one\nLine two", "Two"),
                 Para(false, "Bare quote text", "Two"),
