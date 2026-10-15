@@ -1,0 +1,15 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- card -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M36,30h36a4,4 0,0 1,4 4v40a4,4 0,0 1,-4 4h-36a4,4 0,0 1,-4 -4v-40a4,4 0,0 1,4 -4z" />
+    <!-- text lines -->
+    <path android:fillColor="#111111"
+        android:pathData="M39,38h30v3h-30z M39,45h30v3h-30z M39,52h22v3h-22z" />
+    <!-- heart -->
+    <path android:fillColor="#E0245E"
+        android:pathData="M44,71.5l-1.1,-1C39,67 36.5,64.8 36.5,62.1c0,-2.2 1.7,-3.9 3.9,-3.9 1.2,0 2.4,0.6 3.1,1.5 0.8,-0.9 1.9,-1.5 3.1,-1.5 2.2,0 3.9,1.7 3.9,3.9 0,2.7 -2.5,4.9 -6.4,8.4z" />
+</vector>
