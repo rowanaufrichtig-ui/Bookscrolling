@@ -8,7 +8,8 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-val LikeRed = Color(0xFFE0245E)
+val DangerRed = Color(0xFFE0245E)
+val BookmarkGreen = Color(0xFF2FA866)
 
 private val Light = lightColorScheme(
     primary = Color(0xFF111111),

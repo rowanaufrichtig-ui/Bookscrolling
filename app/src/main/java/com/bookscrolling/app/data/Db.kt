@@ -5,7 +5,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
-class Db(context: Context) : SQLiteOpenHelper(context, "bookscrolling.db", null, 1) {
+class Db(context: Context) : SQLiteOpenHelper(context, "bookscrolling.db", null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -14,7 +14,11 @@ class Db(context: Context) : SQLiteOpenHelper(context, "bookscrolling.db", null,
                 source TEXT NOT NULL, post_count INTEGER NOT NULL, position INTEGER NOT NULL DEFAULT 0,
                 added_at INTEGER NOT NULL)"""
         )
-        db.execSQL("CREATE TABLE likes(book_id TEXT NOT NULL, post INTEGER NOT NULL, PRIMARY KEY(book_id, post))")
+        // "likes" holds bookmarks (the table predates the rename).
+        db.execSQL(
+            """CREATE TABLE likes(book_id TEXT NOT NULL, post INTEGER NOT NULL,
+                created_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(book_id, post))"""
+        )
         db.execSQL(
             """CREATE TABLE comments(
                 id INTEGER PRIMARY KEY AUTOINCREMENT, book_id TEXT NOT NULL, post INTEGER NOT NULL,
@@ -23,7 +27,9 @@ class Db(context: Context) : SQLiteOpenHelper(context, "bookscrolling.db", null,
         db.execSQL("CREATE INDEX comments_post ON comments(book_id, post)")
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) db.execSQL("ALTER TABLE likes ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0")
+    }
 
     fun books(): List<Book> = readableDatabase.rawQuery(
         "SELECT id, title, author, cover, source, post_count, position, added_at FROM books ORDER BY added_at DESC", null
@@ -57,13 +63,16 @@ class Db(context: Context) : SQLiteOpenHelper(context, "bookscrolling.db", null,
         }
     }
 
-    fun likes(bookId: String): Set<Int> =
+    fun bookmarks(bookId: String): Set<Int> =
         readableDatabase.rawQuery("SELECT post FROM likes WHERE book_id = ?", arrayOf(bookId)).use { c ->
             buildSet { while (c.moveToNext()) add(c.getInt(0)) }
         }
 
-    fun setLiked(bookId: String, post: Int, liked: Boolean) {
-        if (liked) writableDatabase.execSQL("INSERT OR IGNORE INTO likes(book_id, post) VALUES(?, ?)", arrayOf<Any>(bookId, post))
+    fun setBookmarked(bookId: String, post: Int, bookmarked: Boolean) {
+        if (bookmarked) writableDatabase.execSQL(
+            "INSERT OR IGNORE INTO likes(book_id, post, created_at) VALUES(?, ?, ?)",
+            arrayOf<Any>(bookId, post, System.currentTimeMillis()),
+        )
         else writableDatabase.delete("likes", "book_id = ? AND post = ?", arrayOf(bookId, post.toString()))
     }
 
@@ -89,5 +98,24 @@ class Db(context: Context) : SQLiteOpenHelper(context, "bookscrolling.db", null,
 
     fun deleteComment(id: Long) {
         writableDatabase.delete("comments", "id = ?", arrayOf(id.toString()))
+    }
+
+    /** (bookId, bookTitle, post, createdAt) for every bookmark, newest first. */
+    fun allBookmarks(): List<SavedItem> = readableDatabase.rawQuery(
+        """SELECT l.book_id, b.title, l.post, l.created_at FROM likes l JOIN books b ON b.id = l.book_id
+           ORDER BY l.created_at DESC, b.title, l.post""", null
+    ).use { c ->
+        buildList { while (c.moveToNext()) add(SavedItem(c.getString(0), c.getString(1), c.getInt(2), "", c.getLong(3))) }
+    }
+
+    fun allComments(): List<SavedItem> = readableDatabase.rawQuery(
+        """SELECT c.book_id, b.title, c.post, c.created_at, c.id, c.body FROM comments c JOIN books b ON b.id = c.book_id
+           ORDER BY c.created_at DESC""", null
+    ).use { c ->
+        buildList {
+            while (c.moveToNext()) add(
+                SavedItem(c.getString(0), c.getString(1), c.getInt(2), "", c.getLong(3), c.getLong(4), c.getString(5))
+            )
+        }
     }
 }

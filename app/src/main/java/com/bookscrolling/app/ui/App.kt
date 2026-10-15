@@ -8,9 +8,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.outlined.AutoStories
+import androidx.compose.material.icons.outlined.Bookmarks
 import androidx.compose.material.icons.outlined.Explore
+import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -39,18 +43,24 @@ import com.bookscrolling.app.AppViewModel
 @Composable
 fun App(vm: AppViewModel) {
     var openBook by rememberSaveable { mutableStateOf<String?>(null) }
+    var openPost by rememberSaveable { mutableStateOf<Int?>(null) }
+    val fontSize by vm.fontSize.collectAsStateWithLifecycleCompat()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val snackbar = remember { SnackbarHostState() }
     val importing by vm.importing.collectAsStateWithLifecycleCompat()
 
     LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(it) } }
-    LaunchedEffect(Unit) { vm.openBook.collect { openBook = it } }
+    LaunchedEffect(Unit) { vm.openBook.collect { openPost = it.post; openBook = it.bookId } }
+    val closeBook = { openBook = null; openPost = null; vm.refreshLibrary(); if (tab == 3) vm.loadSaved() }
 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         val current = openBook
         if (current != null) {
-            BackHandler { openBook = null; vm.refreshLibrary() }
-            ReaderScreen(vm.repo, current, onBack = { openBook = null; vm.refreshLibrary() })
+            BackHandler(onBack = closeBook)
+            ReaderScreen(
+                repo = vm.repo, bookId = current, initialPost = openPost,
+                fontSize = fontSize, onFontSize = vm::setFontSize, onBack = closeBook,
+            )
         } else {
             Scaffold(
                 snackbarHost = { SnackbarHost(snackbar) },
@@ -59,16 +69,19 @@ fun App(vm: AppViewModel) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         NavigationBar(containerColor = MaterialTheme.colorScheme.background, tonalElevation = 0.dp) {
                             val colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
-                            NavigationBarItem(
-                                selected = tab == 0, onClick = { tab = 0 }, colors = colors,
-                                icon = { Icon(if (tab == 0) Icons.Filled.Explore else Icons.Outlined.Explore, null) },
-                                label = { Text("Gutenberg") },
+                            val tabs = listOf(
+                                Triple("Gutenberg", Icons.Filled.Explore, Icons.Outlined.Explore),
+                                Triple("Philosophy", Icons.Filled.Psychology, Icons.Outlined.Psychology),
+                                Triple("My Books", Icons.Filled.AutoStories, Icons.Outlined.AutoStories),
+                                Triple("Bookmarks", Icons.Filled.Bookmarks, Icons.Outlined.Bookmarks),
                             )
-                            NavigationBarItem(
-                                selected = tab == 1, onClick = { tab = 1 }, colors = colors,
-                                icon = { Icon(if (tab == 1) Icons.Filled.AutoStories else Icons.Outlined.AutoStories, null) },
-                                label = { Text("My Books") },
-                            )
+                            tabs.forEachIndexed { i, (label, selectedIcon, icon) ->
+                                NavigationBarItem(
+                                    selected = tab == i, onClick = { tab = i }, colors = colors,
+                                    icon = { Icon(if (tab == i) selectedIcon else icon, null) },
+                                    label = { Text(label, maxLines = 1, softWrap = false) },
+                                )
+                            }
                         }
                     }
                 },
@@ -76,7 +89,9 @@ fun App(vm: AppViewModel) {
                 Box(Modifier.padding(padding)) {
                     when (tab) {
                         0 -> DiscoverScreen(vm)
-                        else -> LibraryScreen(vm)
+                        1 -> PhilosophyScreen(vm)
+                        2 -> LibraryScreen(vm)
+                        else -> SavedScreen(vm)
                     }
                 }
             }

@@ -15,7 +15,19 @@ data class Book(
     companion object {
         const val SOURCE_GUTENBERG = "gutenberg"
         const val SOURCE_LOCAL = "local"
+        const val SOURCE_SEP = "sep"
     }
 }
 
 data class Comment(val id: Long, val post: Int, val body: String, val createdAt: Long)
+
+/** A bookmark or comment shown in the Bookmarks tab, with the passage it belongs to. */
+data class SavedItem(
+    val bookId: String,
+    val bookTitle: String,
+    val post: Int,
+    val excerpt: String,
+    val createdAt: Long,
+    val commentId: Long? = null,
+    val comment: String? = null,
+)

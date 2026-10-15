@@ -1,10 +1,15 @@
 package com.bookscrolling.app.ui
 
 import android.text.format.DateUtils
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -28,10 +34,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Send
-import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.FormatSize
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -39,6 +47,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -50,6 +59,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -58,41 +68,56 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.bookscrolling.app.AppViewModel
 import com.bookscrolling.app.data.Book
 import com.bookscrolling.app.data.BookRepository
 import com.bookscrolling.app.data.Comment
 import com.bookscrolling.app.data.Para
+import com.bookscrolling.app.data.Sep
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.roundToInt
 
-private class ReaderData(val book: Book, val posts: List<Para>, val likes: Set<Int>, val commentCounts: Map<Int, Int>)
+internal class ReaderData(val book: Book, val posts: List<Para>, val bookmarks: Set<Int>, val commentCounts: Map<Int, Int>)
 
 /**
  * The feed. Post 0 is the cover; post i (i >= 1) is paragraph i - 1.
- * Likes and comments are keyed by post index.
+ * Bookmarks and comments are keyed by post index.
  */
 @Composable
-fun ReaderScreen(repo: BookRepository, bookId: String, onBack: () -> Unit) {
+fun ReaderScreen(
+    repo: BookRepository,
+    bookId: String,
+    initialPost: Int?,
+    fontSize: Float,
+    onFontSize: (Float) -> Unit,
+    onBack: () -> Unit,
+) {
     var data by remember(bookId) { mutableStateOf<ReaderData?>(null) }
     var failed by remember(bookId) { mutableStateOf(false) }
     LaunchedEffect(bookId) {
         try {
             data = withContext(Dispatchers.IO) {
                 val book = repo.db.book(bookId) ?: error("missing")
-                ReaderData(book, repo.posts(bookId), repo.db.likes(bookId), repo.db.commentCounts(bookId))
+                ReaderData(book, repo.posts(bookId), repo.db.bookmarks(bookId), repo.db.commentCounts(bookId))
             }
         } catch (e: Exception) {
             failed = true
@@ -100,7 +125,7 @@ fun ReaderScreen(repo: BookRepository, bookId: String, onBack: () -> Unit) {
     }
     val d = data
     when {
-        d != null -> Feed(repo, d, onBack)
+        d != null -> Feed(repo, d, initialPost, fontSize, onFontSize, onBack)
         failed -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             EmptyState("Couldn't open this book", "Try removing it and adding it again.")
         }
@@ -112,11 +137,29 @@ fun ReaderScreen(repo: BookRepository, bookId: String, onBack: () -> Unit) {
 
 @OptIn(FlowPreview::class, ExperimentalMaterial3Api::class)
 @Composable
-private fun Feed(repo: BookRepository, data: ReaderData, onBack: () -> Unit) {
+internal fun Feed(
+    repo: BookRepository,
+    data: ReaderData,
+    initialPost: Int?,
+    fontSize: Float,
+    onFontSize: (Float) -> Unit,
+    onBack: () -> Unit,
+) {
     val book = data.book
     val scope = rememberCoroutineScope()
-    val listState = remember { LazyListState(firstVisibleItemIndex = book.position.coerceIn(0, data.posts.size)) }
-    val likes = remember { mutableStateMapOf<Int, Boolean>().apply { data.likes.forEach { put(it, true) } } }
+    val listState = remember {
+        LazyListState(firstVisibleItemIndex = (initialPost ?: book.position).coerceIn(0, data.posts.size))
+    }
+    val bookmarks = remember { mutableStateMapOf<Int, Boolean>().apply { data.bookmarks.forEach { put(it, true) } } }
+    // Briefly highlight the post we jumped to from the Bookmarks tab.
+    var highlighted by remember { mutableStateOf(initialPost) }
+    LaunchedEffect(Unit) {
+        if (highlighted != null) {
+            delay(1600)
+            highlighted = null
+        }
+    }
+    var fontMenu by remember { mutableStateOf(false) }
     val commentCounts = remember { mutableStateMapOf<Int, Int>().apply { putAll(data.commentCounts) } }
     var commentsFor by remember { mutableStateOf<Int?>(null) }
 
@@ -129,10 +172,10 @@ private fun Feed(repo: BookRepository, data: ReaderData, onBack: () -> Unit) {
         onDispose { repo.db.setPosition(book.id, listState.firstVisibleItemIndex) }
     }
 
-    fun toggleLike(post: Int, forceOn: Boolean = false) {
-        val liked = forceOn || likes[post] != true
-        if (liked) likes[post] = true else likes.remove(post)
-        scope.launch(Dispatchers.IO) { repo.db.setLiked(book.id, post, liked) }
+    fun toggleBookmark(post: Int, forceOn: Boolean = false) {
+        val on = forceOn || bookmarks[post] != true
+        if (on) bookmarks[post] = true else bookmarks.remove(post)
+        scope.launch(Dispatchers.IO) { repo.db.setBookmarked(book.id, post, on) }
     }
 
     val total = data.posts.size + 1
@@ -152,28 +195,51 @@ private fun Feed(repo: BookRepository, data: ReaderData, onBack: () -> Unit) {
                 book.title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium,
                 fontFamily = FontFamily.Serif, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
+            Box {
+                IconButton(onClick = { fontMenu = true }) {
+                    Icon(Icons.Outlined.FormatSize, contentDescription = "Font size", modifier = Modifier.size(20.dp))
+                }
+                DropdownMenu(
+                    expanded = fontMenu,
+                    onDismissRequest = { fontMenu = false },
+                    containerColor = MaterialTheme.colorScheme.background,
+                ) {
+                    FontSizeControl(fontSize, onFontSize)
+                }
+            }
             Text(
                 "$progress%", style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 2.dp, end = 16.dp),
             )
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             items(count = total, key = { it }) { index ->
-                val liked = likes[index] == true
+                val bookmarked = bookmarks[index] == true
                 val comments = commentCounts[index] ?: 0
-                if (index == 0) {
-                    CoverPost(book, total - 1)
-                } else {
-                    ParagraphPost(book, index, data.posts[index - 1], onDoubleTap = { toggleLike(index, forceOn = true) })
-                }
-                Actions(
-                    liked = liked,
-                    comments = comments,
-                    onLike = { toggleLike(index) },
-                    onComment = { commentsFor = index },
+                val highlight by animateColorAsState(
+                    if (highlighted == index) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
+                    animationSpec = tween(600), label = "highlight",
                 )
+                SwipeToComment(onComment = { commentsFor = index }) {
+                    Column(Modifier.background(highlight)) {
+                        if (index == 0) {
+                            CoverPost(book, total - 1)
+                        } else {
+                            ParagraphPost(
+                                book, index, data.posts[index - 1], fontSize,
+                                onDoubleTap = { toggleBookmark(index, forceOn = true) },
+                            )
+                        }
+                        Actions(
+                            bookmarked = bookmarked,
+                            comments = comments,
+                            onBookmark = { toggleBookmark(index) },
+                            onComment = { commentsFor = index },
+                        )
+                    }
+                }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
             item { Spacer(Modifier.navigationBarsPadding().padding(bottom = 24.dp)) }
@@ -230,8 +296,15 @@ private fun CoverPost(book: Book, paragraphs: Int) {
             textAlign = TextAlign.Center, modifier = Modifier.padding(top = 20.dp),
         )
         Text(book.author, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+        if (book.source == Book.SOURCE_SEP) Text(
+            "Stanford Encyclopedia of Philosophy\n" + Sep.articleUrl(book.id.removePrefix("s")).removePrefix("https://"),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 8.dp),
+        )
         Text(
-            "$paragraphs posts · scroll to read",
+            "$paragraphs posts · swipe right to comment",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 12.dp),
@@ -240,7 +313,7 @@ private fun CoverPost(book: Book, paragraphs: Int) {
 }
 
 @Composable
-private fun ParagraphPost(book: Book, index: Int, para: Para, onDoubleTap: () -> Unit) {
+private fun ParagraphPost(book: Book, index: Int, para: Para, fontSize: Float, onDoubleTap: () -> Unit) {
     Column(
         Modifier.fillMaxWidth()
             .pointerInput(index) { detectTapGestures(onDoubleTap = { onDoubleTap() }) }
@@ -271,12 +344,12 @@ private fun ParagraphPost(book: Book, index: Int, para: Para, onDoubleTap: () ->
         if (para.heading) {
             Text(
                 para.text, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Medium,
-                fontSize = 22.sp, lineHeight = 30.sp, textAlign = TextAlign.Center,
+                fontSize = (fontSize * 1.3f).sp, lineHeight = (fontSize * 1.75f).sp, textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
             )
         } else {
             Text(
-                para.text, fontFamily = FontFamily.Serif, fontSize = 17.sp, lineHeight = 27.sp,
+                para.text, fontFamily = FontFamily.Serif, fontSize = fontSize.sp, lineHeight = (fontSize * 1.6f).sp,
                 modifier = Modifier.padding(top = 12.dp),
             )
         }
@@ -284,18 +357,18 @@ private fun ParagraphPost(book: Book, index: Int, para: Para, onDoubleTap: () ->
 }
 
 @Composable
-private fun Actions(liked: Boolean, comments: Int, onLike: () -> Unit, onComment: () -> Unit) {
-    val scale by animateFloatAsState(if (liked) 1.15f else 1f, label = "like")
+private fun Actions(bookmarked: Boolean, comments: Int, onBookmark: () -> Unit, onComment: () -> Unit) {
+    val scale by animateFloatAsState(if (bookmarked) 1.15f else 1f, label = "bookmark")
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onLike) {
+        IconButton(onClick = onBookmark) {
             Icon(
-                if (liked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                contentDescription = if (liked) "Unlike" else "Like",
-                tint = if (liked) LikeRed else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp).scale(scale),
+                if (bookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                contentDescription = if (bookmarked) "Remove bookmark" else "Bookmark",
+                tint = if (bookmarked) BookmarkGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(23.dp).scale(scale),
             )
         }
         IconButton(onClick = onComment) {
@@ -306,8 +379,85 @@ private fun Actions(liked: Boolean, comments: Int, onLike: () -> Unit, onComment
         }
         if (comments > 0) Text(
             "$comments", style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 0.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+/** Swipe a post to the right to open its comments; a comment icon is revealed underneath. */
+@Composable
+private fun SwipeToComment(onComment: () -> Unit, content: @Composable () -> Unit) {
+    val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+    val offset = remember { Animatable(0f) }
+    val threshold = with(LocalDensity.current) { 88.dp.toPx() }
+    val max = threshold * 1.4f
+    var armed by remember { mutableStateOf(false) }
+    val currentOnComment by rememberUpdatedState(onComment)
+
+    Box(
+        Modifier.fillMaxWidth().pointerInput(Unit) {
+            detectHorizontalDragGestures(
+                onDragEnd = {
+                    if (offset.value >= threshold) currentOnComment()
+                    armed = false
+                    scope.launch { offset.animateTo(0f, spring()) }
+                },
+                onDragCancel = {
+                    armed = false
+                    scope.launch { offset.animateTo(0f, spring()) }
+                },
+            ) { change, dx ->
+                val next = (offset.value + dx * if (offset.value > threshold) 0.4f else 1f).coerceIn(0f, max)
+                if (next != offset.value) change.consume()
+                scope.launch { offset.snapTo(next) }
+                val nowArmed = next >= threshold
+                if (nowArmed && !armed) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                armed = nowArmed
+            }
+        },
+    ) {
+        val reveal = (offset.value / threshold).coerceIn(0f, 1f)
+        if (offset.value > 0f) {
+            Box(
+                Modifier.matchParentSize().padding(start = 24.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Icon(
+                    Icons.Outlined.ChatBubbleOutline,
+                    contentDescription = null,
+                    tint = (if (armed) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant)
+                        .copy(alpha = reveal),
+                    modifier = Modifier.size(24.dp).scale(0.6f + 0.4f * reveal),
+                )
+            }
+        }
+        Box(
+            Modifier.offset { IntOffset(offset.value.roundToInt(), 0) }
+                .background(MaterialTheme.colorScheme.background),
+        ) { content() }
+    }
+}
+
+@Composable
+private fun FontSizeControl(fontSize: Float, onFontSize: (Float) -> Unit) {
+    Row(
+        Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = { onFontSize(fontSize - 1f) }, enabled = fontSize > AppViewModel.MIN_FONT_SIZE) {
+            Text("A", fontFamily = FontFamily.Serif, fontSize = 14.sp)
+        }
+        Text(
+            "${fontSize.roundToInt()}",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.width(32.dp),
+            textAlign = TextAlign.Center,
+        )
+        IconButton(onClick = { onFontSize(fontSize + 1f) }, enabled = fontSize < AppViewModel.MAX_FONT_SIZE) {
+            Text("A", fontFamily = FontFamily.Serif, fontSize = 22.sp)
+        }
+        TextButton(onClick = { onFontSize(AppViewModel.DEFAULT_FONT_SIZE) }) { Text("Reset") }
     }
 }
 
@@ -357,7 +507,7 @@ private fun CommentsSheet(repo: BookRepository, bookId: String, post: Int, excer
                         Spacer(Modifier.weight(1f))
                         if (pendingDelete?.id == c.id) {
                             Text(
-                                "Delete", style = MaterialTheme.typography.labelLarge, color = LikeRed,
+                                "Delete", style = MaterialTheme.typography.labelLarge, color = DangerRed,
                                 modifier = Modifier.combinedClickable(onClick = {
                                     comments.remove(c)
                                     pendingDelete = null
