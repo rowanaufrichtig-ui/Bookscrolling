@@ -214,6 +214,8 @@ internal fun Feed(
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
+        val scroller = rememberFastScrollState(listState, total)
+        Box(Modifier.fillMaxSize().fastScroll(scroller)) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             items(count = total, key = { it }) { index ->
                 val bookmarked = bookmarks[index] == true
@@ -243,6 +245,12 @@ internal fun Feed(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
             item { Spacer(Modifier.navigationBarsPadding().padding(bottom = 24.dp)) }
+        }
+        FastScroller(scroller) { index ->
+            if (index == 0) "Cover" else data.posts.getOrNull(index - 1)?.let { p ->
+                if (p.heading) p.text.lines().take(2).joinToString(" · ") else p.chapter
+            }.orEmpty()
+        }
         }
     }
 

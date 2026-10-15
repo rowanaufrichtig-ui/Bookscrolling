@@ -32,8 +32,14 @@ object Sep {
             }?.trim()?.takeIf { it.isNotEmpty() }
             val name = a.text().trim()
             SepEntry(slug, if (parentTopic != null) "$parentTopic: $name" else name, author)
-        }.sortedBy { it.title.lowercase() }
+        }.sortedWith(compareBy({ it.title.firstOrNull()?.isLetter() != true }, { sortKey(it.title) }))
     }
+
+    private val marks = Regex("\\p{Mn}+")
+
+    /** Accent-insensitive key so "Ābhidharma" sorts with the A's. */
+    private fun sortKey(title: String): String =
+        marks.replace(java.text.Normalizer.normalize(title.lowercase(), java.text.Normalizer.Form.NFD), "")
 
     fun fetchArticle(slug: String): SepArticle = parseArticle(Http.getText(articleUrl(slug)))
 

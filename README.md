@@ -4,10 +4,10 @@ An Android app that turns any EPUB into a scrollable feed. Each paragraph is a p
 
 ## Features
 
-- **Feed reader**: every paragraph and chapter heading is a post. Tap the green bookmark (or double-tap the text) to save a post. Swipe a post to the right, or tap 💬, to comment on it. The **Aa** button next to the progress percentage changes the text size. Your place in each book is saved.
+- **Feed reader**: every paragraph and chapter heading is a post. Tap the green bookmark (or double-tap the text) to save a post. Swipe a post to the right, or tap 💬, to comment on it. The **Aa** button next to the progress percentage changes the text size. While scrolling, a handle appears on the right edge. Drag it to move through the whole book, with a bubble showing the chapter and percentage. Your place in each book is saved.
 - **Gutenberg tab**: browse the most popular Project Gutenberg books or search 70,000+ public-domain titles. Tap a book to download it and start scrolling.
-- **Philosophy tab**: all ~1,800 articles in the [Stanford Encyclopedia of Philosophy](https://plato.stanford.edu). Search by topic or author, or press shuffle to open a random article. Each article opens as a feed of its preamble and main text, and common logic symbols are shown as Unicode.
-- **My Books tab**: search your shelf, add your own `.epub` files with **+**, and long-press a book to remove it. You can also use "Open with → Bookscrolling" from a file manager.
+- **Philosophy tab**: all ~1,800 articles in the [Stanford Encyclopedia of Philosophy](https://plato.stanford.edu). Search by topic or author, jump with the A–Z index on the right edge, or press shuffle to open a random article. Each article opens as a feed of its preamble and main text, and common logic symbols are shown as Unicode.
+- **My Books tab**: search your shelf, sorted A–Z with an A–Z index (ignoring "The/A/An") or by most recent, add your own `.epub` files with **+**, and long-press a book to remove it. You can also use "Open with → Bookscrolling" from a file manager.
 - **Bookmarks tab**: every bookmarked passage and every comment, across all books and articles. Tap one to jump to that paragraph.
 - A minimal black-and-white interface with a serif reading font. It follows the system light/dark setting.
 

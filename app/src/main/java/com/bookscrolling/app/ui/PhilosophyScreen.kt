@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Shuffle
 import androidx.compose.material3.CircularProgressIndicator
@@ -61,7 +62,10 @@ fun PhilosophyScreen(vm: AppViewModel) {
             ) { Icon(Icons.Outlined.Shuffle, contentDescription = "Random article") }
         }
         SearchField(query, { query = it }, "Search ${state.entries.size.takeIf { it > 0 } ?: ""} articles", Modifier.padding(horizontal = 16.dp))
-        LazyColumn(Modifier.fillMaxSize().padding(top = 8.dp)) {
+        val listState = rememberLazyListState()
+        val letters = remember(filtered) { filtered.map { indexLetter(it.title) } }
+        Box(Modifier.fillMaxSize().padding(top = 8.dp)) {
+        LazyColumn(Modifier.fillMaxSize().padding(end = if (letters.size >= 15) 24.dp else 0.dp), state = listState) {
             items(filtered, key = { it.slug }) { entry ->
                 SepRow(
                     entry = entry,
@@ -83,6 +87,8 @@ fun PhilosophyScreen(vm: AppViewModel) {
                     }
                 }
             }
+        }
+        AlphabetIndex(listState, letters)
         }
     }
 }

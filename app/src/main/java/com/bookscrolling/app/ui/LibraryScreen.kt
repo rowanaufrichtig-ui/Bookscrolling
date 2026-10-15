@@ -5,6 +5,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.AlertDialog
@@ -51,14 +53,21 @@ fun LibraryScreen(vm: AppViewModel) {
     }
     val addBook = { picker.launch(arrayOf("application/epub+zip", "application/octet-stream", "application/zip", "*/*")) }
 
-    val filtered = remember(books, query) {
+    var alphabetical by rememberSaveable { mutableStateOf(true) }
+    val filtered = remember(books, query, alphabetical) {
         val q = query.trim()
-        if (q.isEmpty()) books
+        val matching = if (q.isEmpty()) books
         else books.filter { it.title.contains(q, ignoreCase = true) || it.author.contains(q, ignoreCase = true) }
+        if (alphabetical) matching.sortedWith(
+            compareBy<Book>({ ALPHABET.indexOf(indexLetter(it.title, ignoreArticles = true)) }, { sortTitle(it.title).lowercase() }),
+        ) else matching
     }
 
     Column(Modifier.fillMaxSize()) {
         Header("My Books", "${books.size} on your shelf") {
+            if (books.isNotEmpty()) TextButton(onClick = { alphabetical = !alphabetical }) {
+                Text(if (alphabetical) "A–Z" else "Recent", style = MaterialTheme.typography.labelLarge)
+            }
             IconButton(onClick = addBook) { Icon(Icons.Outlined.Add, contentDescription = "Add EPUB") }
         }
         if (books.isEmpty()) {
@@ -72,7 +81,12 @@ fun LibraryScreen(vm: AppViewModel) {
             return@Column
         }
         SearchField(query, { query = it }, "Search your books", Modifier.padding(horizontal = 16.dp))
-        LazyColumn(Modifier.fillMaxSize().padding(top = 8.dp)) {
+        val listState = rememberLazyListState()
+        val letters = remember(filtered, alphabetical) {
+            if (alphabetical) filtered.map { indexLetter(it.title, ignoreArticles = true) } else emptyList()
+        }
+        Box(Modifier.fillMaxSize().padding(top = 8.dp)) {
+        LazyColumn(Modifier.fillMaxSize().padding(end = if (letters.size >= 15) 24.dp else 0.dp), state = listState) {
             items(filtered, key = { it.id }) { book ->
                 LibraryRow(book, onOpen = { vm.openBookNow(book.id) }, onLongPress = { pendingDelete = book })
             }
@@ -82,6 +96,8 @@ fun LibraryScreen(vm: AppViewModel) {
                     modifier = Modifier.fillMaxWidth().padding(24.dp),
                 )
             }
+        }
+        AlphabetIndex(listState, letters)
         }
     }
 
