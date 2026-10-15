@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Send
@@ -67,12 +68,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -475,6 +480,14 @@ private fun CommentsSheet(repo: BookRepository, bookId: String, post: Int, excer
     val scope = rememberCoroutineScope()
     val comments = remember { mutableStateListOf<Comment>() }
     var draft by remember { mutableStateOf("") }
+    val inputFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    // Opening the sheet is for writing: focus the field and show the keyboard right away.
+    LaunchedEffect(Unit) {
+        delay(150) // let the sheet's window attach before asking for focus
+        inputFocus.requestFocus()
+        keyboard?.show()
+    }
     var pendingDelete by remember { mutableStateOf<Comment?>(null) }
 
     LaunchedEffect(post) {
@@ -538,7 +551,8 @@ private fun CommentsSheet(repo: BookRepository, bookId: String, post: Int, excer
             TextField(
                 value = draft, onValueChange = { draft = it },
                 placeholder = { Text("Add a comment…") },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).focusRequester(inputFocus),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 maxLines = 4,
                 shape = RoundedCornerShape(20.dp),
                 colors = TextFieldDefaults.colors(
