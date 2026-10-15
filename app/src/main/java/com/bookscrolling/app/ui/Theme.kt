@@ -2,6 +2,7 @@ package com.bookscrolling.app.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -49,5 +50,9 @@ private val Dark = darkColorScheme(
 
 @Composable
 fun BookTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) Dark else Light, content = content)
+    val colors = if (isSystemInDarkTheme()) Dark else Light
+    MaterialTheme(colorScheme = colors) {
+        // Surface sets LocalContentColor so plain Text follows the theme (e.g. light text in dark mode).
+        Surface(color = colors.background, contentColor = colors.onBackground, content = content)
+    }
 }

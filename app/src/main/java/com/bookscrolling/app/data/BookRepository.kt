@@ -19,7 +19,7 @@ class BookRepository(private val context: Context) {
     fun addGutenberg(g: GutenbergBook, onProgress: (Float) -> Unit): Book {
         val id = gutenbergId(g.id)
         db.book(id)?.let { if (File(dir(id), POSTS).exists()) return it }
-        val tmp = File.createTempFile("dl", ".epub", context.cacheDir)
+        val tmp = File.createTempFile("download", ".epub", context.cacheDir)
         try {
             Gutenberg.downloadEpub(g.id, tmp, onProgress)
             return store(id, tmp, Book.SOURCE_GUTENBERG, fallbackCoverUrl = g.coverUrl)

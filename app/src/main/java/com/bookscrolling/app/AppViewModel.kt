@@ -106,7 +106,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 refreshLibrary()
                 _openBook.send(stored.id)
             } catch (e: Exception) {
-                _messages.send(if (e is EpubException) e.message ?: "Couldn't read book" else "Download failed. Check your connection.")
+                _messages.send(
+                    when (e) {
+                        is EpubException -> e.message ?: "Couldn't read this book"
+                        is java.io.IOException -> "Download failed. Check your connection."
+                        else -> "Couldn't add this book (${e.javaClass.simpleName})"
+                    }
+                )
             } finally {
                 _downloads.update { it - book.id }
             }
